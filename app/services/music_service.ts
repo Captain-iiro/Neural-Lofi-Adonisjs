@@ -71,10 +71,27 @@ export default class MusicService {
         }
     }
 
-    async getStatus(conversionId: string) {
-        // 1. Check if we already have the files locally (by checking if we downloaded them)
-        // Since we don't have a DB, we can't easily map conversionId to filename without querying API first
-        // So we'll query API first, then check/download.
+    async getStatus(conversionId: string, style: string = 'unknown') {
+        // 1. Check if we already have the files locally
+        // We construct the filename based on the convention: {taskId}_{style}_v{version}.mp3
+        const filenameV1 = `${conversionId}_${style}_v1.mp3`
+        const filenameV2 = `${conversionId}_${style}_v2.mp3`
+        const filepathV1 = path.join(this.storagePath, filenameV1)
+        const filepathV2 = path.join(this.storagePath, filenameV2)
+
+        try {
+            // Check if files exist locally first to avoid unnecessary API calls
+            await fs.access(filepathV1)
+            return {
+                status: 'completed',
+                files: [
+                    { url: `/generated/music/${filenameV1}`, version: 1 },
+                    { url: `/generated/music/${filenameV2}`, version: 2 }
+                ]
+            }
+        } catch {
+            // Files don't exist, query API
+        }
 
         try {
             const url = new URL('https://api.musicgpt.com/api/public/v1/byId')
@@ -106,26 +123,22 @@ export default class MusicService {
 
                 // Handle version 1
                 if (conv.conversion_path_1) {
-                    const filename = `${conversionId}_v1.mp3`
-                    const filepath = path.join(this.storagePath, filename)
                     try {
-                        await fs.access(filepath)
+                        await fs.access(filepathV1)
                     } catch {
-                        await this.downloadFile(conv.conversion_path_1, filepath)
+                        await this.downloadFile(conv.conversion_path_1, filepathV1)
                     }
-                    files.push({ url: `/generated/music/${filename}`, version: 1 })
+                    files.push({ url: `/generated/music/${filenameV1}`, version: 1 })
                 }
 
                 // Handle version 2
                 if (conv.conversion_path_2) {
-                    const filename = `${conversionId}_v2.mp3`
-                    const filepath = path.join(this.storagePath, filename)
                     try {
-                        await fs.access(filepath)
+                        await fs.access(filepathV2)
                     } catch {
-                        await this.downloadFile(conv.conversion_path_2, filepath)
+                        await this.downloadFile(conv.conversion_path_2, filepathV2)
                     }
-                    files.push({ url: `/generated/music/${filename}`, version: 2 })
+                    files.push({ url: `/generated/music/${filenameV2}`, version: 2 })
                 }
 
                 return {
@@ -169,24 +182,19 @@ export default class MusicService {
                 const parts = file.replace('.mp3', '').split('_')
 
                 if (parts.length >= 2) {
-                    // New format: {conversionId}_v{version}.mp3
-                    // Old format: {taskId}_{style}_v{version}.mp3
-                    // We need to support both or migrate. Let's support the new one primarily.
-
-                    let taskId = 'unknown'
-                    let style = 'unknown'
+                    let taskId = parts[0]
+                    let style = 'Unknown'
                     let version = '1'
 
-                    if (parts.length === 2) {
-                        // New format: conversionId_v1.mp3
-                        taskId = parts[0] // Use conversionId as taskId for display
-                        version = parts[1].replace('v', '')
-                        style = 'Generated' // We lost style in filename, but that's okay for now
-                    } else if (parts.length >= 3) {
-                        // Old format
-                        taskId = parts[0]
+                    if (parts.length >= 3) {
+                        // Correct format: {taskId}_{style}_v{version}.mp3
                         style = parts[1]
-                        version = parts[parts.length - 1].replace('v', '')
+                        const versionStr = parts[parts.length - 1].replace('.mp3', '')
+                        version = versionStr.replace('v', '')
+                    } else {
+                        // Legacy format: {conversionId}_v{version}.mp3
+                        const versionStr = parts[1].replace('.mp3', '')
+                        version = versionStr.replace('v', '')
                     }
 
                     tracks.push({

@@ -23,9 +23,11 @@ export default class MusicController {
         }
     }
 
-    async status({ params, response }: HttpContext) {
-        const status = await this.musicService.getStatus(params.id)
-        return response.json(status)
+    async status({ request, response }: HttpContext) {
+        const id = request.param('id')
+        const style = request.input('style', 'unknown')
+        const result = await this.musicService.getStatus(id, style)
+        return response.json(result)
     }
 
     async library({ response }: HttpContext) {

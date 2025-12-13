@@ -1,25 +1,27 @@
-let currentAudio = null;
+let audioPlayer = null; // Use a global variable for the Audio object
 let isPlaying = false;
+let currentPlayingCard = null;
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize the audio player
+    audioPlayer = new Audio();
+
     // --- SELECTION LOGIC ---
     const styleOptions = document.querySelectorAll('.style-card');
     const textureOptions = document.querySelectorAll('.texture-btn');
     let selectedStyle = 'classic';
     let selectedTextures = [];
 
-    // Style Selection
+    // Style Selection (Keep as is)
     styleOptions.forEach(option => {
         option.addEventListener('click', () => {
-            // Remove selected class from all
             styleOptions.forEach(opt => opt.classList.remove('selected'));
-            // Add to clicked
             option.classList.add('selected');
             selectedStyle = option.dataset.value;
         });
     });
 
-    // Texture Selection
+    // Texture Selection (Keep as is)
     textureOptions.forEach(option => {
         option.addEventListener('click', () => {
             option.classList.toggle('active');
@@ -72,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const pollId = data.conversionId || data.taskId;
 
                 if (pollId) {
-                    pollStatus(pollId, data.eta);
+                    pollStatus(pollId, data.eta, selectedStyle);
                 }
             } catch (error) {
                 console.error('Generation failed:', error);
@@ -82,11 +84,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    async function pollStatus(id, eta) {
+    async function pollStatus(id, eta, style) {
         let progress = 10;
         const interval = setInterval(async () => {
             try {
-                const response = await fetch(`/api/status/${id}`);
+                // Pass style to status endpoint so backend can name file correctly
+                const response = await fetch(`/api/status/${id}?style=${style}`);
                 const data = await response.json();
 
                 if (data.status === 'completed') {
@@ -116,21 +119,51 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- PLAYER LOGIC ---
-    const audioPlayer = new Audio();
     const playPauseBtn = document.getElementById('play-pause-btn');
     const currentTrackTitle = document.getElementById('current-track-title');
     const volumeSlider = document.getElementById('volume-slider');
     const visualizer = document.getElementById('visualizer');
 
-    let isPlaying = false;
+    // Function exposed globally to be called from the HTML track card
+    window.playTrack = (url, title, trackCardButton) => {
+        const newTrackCard = trackCardButton.closest('.track-card');
 
-    window.playTrack = (url, title) => {
-        audioPlayer.src = url;
-        audioPlayer.play();
-        isPlaying = true;
-        updatePlayButton();
-        if (currentTrackTitle) currentTrackTitle.textContent = title;
-        if (visualizer) visualizer.classList.remove('paused');
+        // Check if the same track is being played/resumed
+        if (currentPlayingCard === newTrackCard && isPlaying) {
+            // Pause the current track
+            audioPlayer.pause();
+            isPlaying = false;
+            if (visualizer) visualizer.classList.add('paused');
+            updatePlayButton();
+            trackCardButton.classList.remove('playing');
+        } else if (currentPlayingCard === newTrackCard && !isPlaying) {
+            // Resume the current track
+            audioPlayer.play();
+            isPlaying = true;
+            if (visualizer) visualizer.classList.remove('paused');
+            updatePlayButton();
+            trackCardButton.classList.add('playing');
+        } else {
+            // Stop current track/reset UI if a new one is selected
+            if (currentPlayingCard) {
+                const prevBtn = currentPlayingCard.querySelector('.play-track-btn');
+                if (prevBtn) prevBtn.classList.remove('playing');
+            }
+
+            // Load and play new track
+            audioPlayer.src = url;
+            audioPlayer.play();
+            isPlaying = true;
+
+            // Update UI
+            updatePlayButton();
+            if (currentTrackTitle) currentTrackTitle.textContent = title;
+            if (visualizer) visualizer.classList.remove('paused');
+
+            // Mark the new card as playing
+            trackCardButton.classList.add('playing');
+            currentPlayingCard = newTrackCard;
+        }
     };
 
     if (playPauseBtn) {
@@ -139,9 +172,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (isPlaying) {
                     audioPlayer.pause();
                     if (visualizer) visualizer.classList.add('paused');
+                    if (currentPlayingCard) {
+                        const btn = currentPlayingCard.querySelector('.play-track-btn');
+                        if (btn) btn.classList.remove('playing');
+                    }
                 } else {
                     audioPlayer.play();
                     if (visualizer) visualizer.classList.remove('paused');
+                    if (currentPlayingCard) {
+                        const btn = currentPlayingCard.querySelector('.play-track-btn');
+                        if (btn) btn.classList.add('playing');
+                    }
                 }
                 isPlaying = !isPlaying;
                 updatePlayButton();
@@ -149,17 +190,65 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // The seekSlider and volumeSlider listeners should refer to audioPlayer, not currentAudio
-    // Assuming seekSlider is defined elsewhere or will be added.
-    // For now, only volumeSlider is present in the original code.
-
     if (volumeSlider) {
+        // Initialize volume
+        audioPlayer.volume = volumeSlider.value / 100;
+
         volumeSlider.addEventListener('input', (e) => {
             if (audioPlayer) {
+                // Volume slider uses 0-100, Audio object uses 0-1
                 audioPlayer.volume = e.target.value / 100;
             }
         });
     }
+
+    // --- PROGRESS BAR LOGIC ---
+    const progressSlider = document.getElementById('progress-slider');
+    const playerProgressFill = document.getElementById('player-progress-fill');
+    const currentTimeEl = document.getElementById('current-time');
+    const totalDurationEl = document.getElementById('total-duration');
+
+    function formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    if (progressSlider && playerProgressFill) {
+        // Update progress bar as audio plays
+        audioPlayer.addEventListener('timeupdate', () => {
+            if (audioPlayer.duration) {
+                const progress = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+                progressSlider.value = progress;
+                playerProgressFill.style.width = `${progress}%`;
+
+                if (currentTimeEl) currentTimeEl.textContent = formatTime(audioPlayer.currentTime);
+            }
+        });
+
+        // Set total duration when metadata is loaded
+        audioPlayer.addEventListener('loadedmetadata', () => {
+            if (totalDurationEl) totalDurationEl.textContent = formatTime(audioPlayer.duration);
+        });
+
+        // Seek when slider is changed
+        progressSlider.addEventListener('input', (e) => {
+            if (audioPlayer.duration) {
+                const seekTime = (e.target.value / 100) * audioPlayer.duration;
+                audioPlayer.currentTime = seekTime;
+                playerProgressFill.style.width = `${e.target.value}%`;
+            }
+        });
+    }
+
+    // Listen for the audio player to end
+    audioPlayer.addEventListener('ended', () => {
+        isPlaying = false;
+        updatePlayButton();
+        if (visualizer) visualizer.classList.add('paused');
+        if (currentPlayingCard) currentPlayingCard.querySelector('.play-track-btn').classList.remove('playing');
+        if (currentTrackTitle) currentTrackTitle.textContent = 'TRACK_ENDED';
+    });
 
     function updatePlayButton() {
         if (!playPauseBtn) return;
