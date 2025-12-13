@@ -10,7 +10,7 @@
 
 Ce projet est une solution au challenge **Neural_Lofi** de DevChallenges. J'ai choisi d'utiliser le framework **AdonisJS v6**.
 video demo:
-<video controls src="2025-12-13 16-39-35.mp4" title="demo"></video>
+![[Video Demo](2025-12-13%2016-39-35.mp4)
 
 ---
 
