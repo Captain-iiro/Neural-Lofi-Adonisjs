@@ -456,6 +456,14 @@ body {
   text-shadow: 0 0 8px rgba(111, 231, 243, 0.5);
 }
 
+.control-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  transform: none;
+  color: #94a3b8;
+  text-shadow: none;
+}
+
 /* =========================================
    PLAYER BAR LAYOUT
    ========================================= */

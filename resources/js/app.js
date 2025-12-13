@@ -164,6 +164,11 @@ document.addEventListener('DOMContentLoaded', () => {
             trackCardButton.classList.add('playing');
             currentPlayingCard = newTrackCard;
         }
+
+        // Update navigation buttons state
+        if (typeof updateNavigationState === 'function') {
+            updateNavigationState();
+        }
     };
 
     if (playPauseBtn) {
@@ -198,7 +203,43 @@ document.addEventListener('DOMContentLoaded', () => {
             if (audioPlayer) {
                 // Volume slider uses 0-100, Audio object uses 0-1
                 audioPlayer.volume = e.target.value / 100;
+
+                // If user drags slider, unmute if muted
+                if (audioPlayer.muted) {
+                    audioPlayer.muted = false;
+                    updateVolumeIcon();
+                }
             }
+        });
+    }
+
+    // --- MUTE LOGIC ---
+    const volumeIcon = document.getElementById('volume-icon');
+    let previousVolume = 100;
+
+    function updateVolumeIcon() {
+        if (!volumeIcon) return;
+
+        if (audioPlayer.muted || audioPlayer.volume === 0) {
+            // Mute icon
+            volumeIcon.innerHTML = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line>';
+        } else {
+            // Volume icon
+            volumeIcon.innerHTML = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>';
+        }
+    }
+
+    if (volumeIcon) {
+        volumeIcon.addEventListener('click', () => {
+            if (audioPlayer.muted) {
+                audioPlayer.muted = false;
+                if (volumeSlider) volumeSlider.value = previousVolume;
+            } else {
+                previousVolume = volumeSlider ? volumeSlider.value : 100;
+                audioPlayer.muted = true;
+                if (volumeSlider) volumeSlider.value = 0;
+            }
+            updateVolumeIcon();
         });
     }
 
@@ -241,13 +282,68 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- PLAYER NAVIGATION LOGIC ---
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+
+    function updateNavigationState() {
+        if (!prevBtn || !nextBtn) return;
+
+        if (!currentPlayingCard) {
+            prevBtn.disabled = true;
+            nextBtn.disabled = true;
+            return;
+        }
+
+        const prevCard = currentPlayingCard.previousElementSibling;
+        const nextCard = currentPlayingCard.nextElementSibling;
+
+        prevBtn.disabled = !prevCard || !prevCard.classList.contains('track-card');
+        nextBtn.disabled = !nextCard || !nextCard.classList.contains('track-card');
+    }
+
+    function playNextTrack() {
+        if (!currentPlayingCard) return;
+        const nextCard = currentPlayingCard.nextElementSibling;
+        if (nextCard && nextCard.classList.contains('track-card')) {
+            const playBtn = nextCard.querySelector('.play-track-btn');
+            if (playBtn) playBtn.click();
+        }
+    }
+
+    function playPrevTrack() {
+        if (!currentPlayingCard) return;
+        const prevCard = currentPlayingCard.previousElementSibling;
+        if (prevCard && prevCard.classList.contains('track-card')) {
+            const playBtn = prevCard.querySelector('.play-track-btn');
+            if (playBtn) playBtn.click();
+        }
+    }
+
+    if (prevBtn) {
+        prevBtn.addEventListener('click', playPrevTrack);
+    }
+
+    if (nextBtn) {
+        nextBtn.addEventListener('click', playNextTrack);
+    }
+
+    // Initialize state
+    updateNavigationState();
+
     // Listen for the audio player to end
     audioPlayer.addEventListener('ended', () => {
-        isPlaying = false;
-        updatePlayButton();
-        if (visualizer) visualizer.classList.add('paused');
-        if (currentPlayingCard) currentPlayingCard.querySelector('.play-track-btn').classList.remove('playing');
-        if (currentTrackTitle) currentTrackTitle.textContent = 'TRACK_ENDED';
+        // Auto-play next track
+        playNextTrack();
+
+        // If no next track (end of list), reset state
+        if (audioPlayer.paused) {
+            isPlaying = false;
+            updatePlayButton();
+            if (visualizer) visualizer.classList.add('paused');
+            if (currentPlayingCard) currentPlayingCard.querySelector('.play-track-btn').classList.remove('playing');
+            if (currentTrackTitle) currentTrackTitle.textContent = 'TRACK_ENDED';
+        }
     });
 
     function updatePlayButton() {
