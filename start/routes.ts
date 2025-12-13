@@ -9,4 +9,11 @@
 
 import router from '@adonisjs/core/services/router'
 
-router.on('/').render('pages/home')
+const MusicController = () => import('#controllers/music_controller')
+
+router.get('/', [MusicController, 'index'])
+router.group(() => {
+    router.post('generate', [MusicController, 'generate'])
+    router.get('status/:id', [MusicController, 'status'])
+    router.get('library', [MusicController, 'library'])
+}).prefix('api')
