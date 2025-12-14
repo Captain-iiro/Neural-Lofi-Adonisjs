@@ -1,7 +1,7 @@
 # Neural_Lofi — Solution avec AdonisJS 6
 
 [![DevChallenges](https://img.shields.io/badge/DevChallenges-WEEK--49-blueviolet?style=for-the-badge)](https://devchallenges.yoandev.co/)
-[![Niveau](https://img.shields.io/badge/Niveau-Difficile-red?style=for-the-badge)]
+![Niveau](https://img.shields.io/badge/Niveau-Difficile-red?style=for-the-badge)
 [![Stack](https://img.shields.io/badge/Stack-AdonisJS_v6_&_Edge-5A46C4?style=for-the-badge&logo=adonisjs)](https://adonisjs.com/)
 
 ---
